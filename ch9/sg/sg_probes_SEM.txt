@@ -1,0 +1,80 @@
+// These are the esg (emergent stochastic / sentence generator) rules
+// See emer/emergent/esg for details on syntax etc.
+// probe sentences
+
+// the | means to go in sequential order instead of generating at random
+Sentences | {
+	kitchen1
+	kitchen2
+	kitchen3
+	kitchen4
+	park1
+	park2
+	park3
+	park4	
+}
+
+kitchen1 {
+	=Agent=Adult
+	=Action=Gave
+	=Patient=Soup
+	=Mod=Recipient
+	=Recipient=Child
+	'adult' 'gave' 'soup' 'to' 'child'
+}
+kitchen2 {
+	=Agent=Child
+	=Action=Ate
+	=Patient=Soup
+	=Mod=Instrument
+	=Instrument=Spoon
+	'child' 'ate' 'soup' 'with' 'spoon'
+}
+kitchen3 {
+	=Agent=Adult
+	=Action=Gave
+	=Patient=Steak
+	=Mod=Recipient
+	=Recipient=Schoolgirl
+	'adult' 'gave' 'steak' 'to' 'schoolgirl'
+}
+kitchen4 {
+	=Agent=Schoolgirl
+	=Action=Ate
+	=Patient=Steak
+	=Mod=Instrument
+	=Instrument=knife
+	'schoolgirl' 'ate' 'steak' 'with' 'knife'
+}
+park1 {
+	=Agent=PitcherPers
+	=Action=Threw
+	=Patient=Ball
+	=Mod=Recipient
+	=Recipient=Teacher
+	'pitcherpers' 'threw' 'ball' 'to' 'teacher'
+}
+park2 {
+	=Agent=Teacher
+	=Action=Hit
+	=Patient=Ball
+	=Mod=Instrument
+	=Instrument=Bat
+	'Teacher' 'hit' 'ball' 'with' 'bat'
+}
+park3 {
+	=Agent=Child
+	=Action=Gave
+	=Patient=Ball
+	=Mod=Recipient
+	=Recipient=Dog
+	'child' 'gave' 'ball' 'to' 'dog'
+}
+park4 {
+	=Agent=Dog
+	=Action=Hit
+	=Patient=Ball
+	=Mod=Location
+	=Location=Park
+	'dog' 'hit' 'ball' 'in' 'park'
+}

@@ -39,6 +39,7 @@ import (
 	"github.com/emer/etable/etensor"
 	_ "github.com/emer/etable/etview" // include to get gui views
 	"github.com/emer/etable/metric"
+	"github.com/emer/etable/pca"
 	"github.com/emer/etable/simat"
 	"github.com/emer/etable/split"
 	"github.com/emer/leabra/deep"
@@ -194,6 +195,27 @@ var ParamSets = params.Sets{
 	}},
 }
 
+// Reps contains standard analysis of representations
+type Reps struct {
+	SimMat    *simat.SimMat `view:"no-inline" desc:"similarity matrix"`
+	PCAPlot   *eplot.Plot2D `view:"no-inline" desc:"plot of pca data"`
+	ClustPlot *eplot.Plot2D `view:"no-inline" desc:"cluster plot"`
+	PCA       *pca.PCA      `view:"-" desc:"pca results"`
+	PCAPrjn   *etable.Table `view:"-" desc:"pca projections onto eigenvectors"`
+}
+
+func (rp *Reps) Init() {
+	rp.SimMat = &simat.SimMat{}
+	rp.SimMat.Init()
+	rp.PCA = &pca.PCA{}
+	rp.PCA.Init()
+	rp.PCAPrjn = &etable.Table{}
+	rp.PCAPlot = &eplot.Plot2D{}
+	rp.PCAPlot.InitName(rp.PCAPlot, "PCAPlot") // any Ki obj needs this
+	rp.ClustPlot = &eplot.Plot2D{}
+	rp.ClustPlot.InitName(rp.ClustPlot, "ClustPlot") // any Ki obj needs this
+}
+
 // Sim encapsulates the entire simulation model, and we define all the
 // functionality as methods on this struct.  This structure keeps all relevant
 // state information organized and available without having to pass everything around
@@ -207,6 +229,7 @@ type Sim struct {
 	TstTrlLog       *etable.Table     `view:"no-inline" desc:"testing trial-level log data"`
 	SentProbeTrlLog *etable.Table     `view:"no-inline" desc:"probing trial-level log data"`
 	NounProbeTrlLog *etable.Table     `view:"no-inline" desc:"probing trial-level log data"`
+	BertLog         *etable.Table     `view:"no-inline" desc:"bert model log data"`
 	TrnTrlAmbStats  *etable.Table     `view:"no-inline" desc:"aggregate trl stats for last epc"`
 	TrnTrlQTypStats *etable.Table     `view:"no-inline" desc:"aggregate trl stats for last epc"`
 	RunLog          *etable.Table     `view:"no-inline" desc:"summary log of each run"`
@@ -230,6 +253,8 @@ type Sim struct {
 	StatLayNms      []string          `view:"-" desc:"stat layers"`
 	StatNms         []string          `view:"-" desc:"stat short names"`
 	ProbeNms        []string          `view:"-" desc:"layers to probe"`
+	NounProbe       Reps              `view:"inline" desc:"representational analysis of Gestalt layer"`
+	Bert            Reps              `view:"inline" desc:"representational analysis of Bert model"`
 
 	// statistics: note use float64 as that is best for etable.Table
 	TrlOut        string     `inactive:"+" desc:"output response(s) output units active > .2"`
@@ -292,6 +317,7 @@ func (ss *Sim) New() {
 	ss.TstTrlLog = &etable.Table{}
 	ss.SentProbeTrlLog = &etable.Table{}
 	ss.NounProbeTrlLog = &etable.Table{}
+	ss.BertLog = &etable.Table{}
 	ss.RunLog = &etable.Table{}
 	ss.RunStats = &etable.Table{}
 	ss.Params = ParamSets
@@ -304,6 +330,8 @@ func (ss *Sim) New() {
 	ss.StatLayNms = []string{"Filler", "EncodeP"}
 	ss.StatNms = []string{"Fill", "Inp"}
 	ss.ProbeNms = []string{"Gestalt", "GestaltCT"}
+	ss.NounProbe.Init()
+	ss.Bert.Init()
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////
@@ -363,8 +391,8 @@ func (ss *Sim) ConfigEnv() {
 	ss.SentProbeEnv.Nm = "SentProbeEnv"
 	ss.SentProbeEnv.Dsc = "probe params and state"
 	ss.SentProbeEnv.Seq.Max = 17
-	ss.SentProbeEnv.OpenRulesFromAsset("sg_probes.txt")
-	// ss.SentProbeEnv.Rules.OpenRules("sg_probes.txt")
+	//ss.SentProbeEnv.OpenRulesFromAsset("sg_probes.txt")
+	ss.SentProbeEnv.Rules.OpenRules("sg_probes_SEM.txt")
 	ss.SentProbeEnv.PPassive = 0 // passive explicitly marked
 	ss.SentProbeEnv.Words = SGWords
 	ss.SentProbeEnv.Roles = SGRoles
@@ -376,7 +404,7 @@ func (ss *Sim) ConfigEnv() {
 
 	ss.NounProbeEnv.Nm = "NounProbeEnv"
 	ss.NounProbeEnv.Dsc = "probe params and state"
-	ss.NounProbeEnv.Words = SGWords
+	ss.NounProbeEnv.Words = SGWords_context
 	ss.NounProbeEnv.Validate()
 
 	ss.TrainEnv.Init(0)
@@ -981,6 +1009,24 @@ func (ss *Sim) ProbeAll() {
 		ss.LogNounProbeTrl(ss.NounProbeTrlLog)
 	}
 	ss.ProbeClusterPlot()
+
+	rels := etable.NewIdxView(ss.SentProbeTrlLog)
+	// rels.SortCol(ss.NounProbeTrlLog.ColIdx("TrialName"), true)
+	ss.NounProbe.SimMat.TableCol(rels, "Gestalt", "Trial", true, metric.Correlation64)
+	// ss.NounProbe.PCA.TableCol(rels, "Gestalt", metric.Covariance64)
+	// ss.NounProbe.PCA.ProjectColToTable(ss.NounProbe.PCAPrjn, rels, "Gestalt", "Trial", []int{0, 1})
+	// ss.ConfigPCAPlot(ss.NounProbe.PCAPlot, ss.NounProbe.PCAPrjn, "NounProbeRel")
+	// ss.ClustPlot(ss.NounProbeClustPlot, rels, "Gestalt", "TrialName", clust.MaxDist)
+
+	schema := etable.Schema{
+		{"Word", etensor.STRING, nil, nil},
+		{"Tensor", etensor.FLOAT64, []int{16, 16}, nil},
+	}
+	ss.BertLog.SetFromSchema(schema, 0)
+	ss.BertLog.OpenCSV("bert(tensonvalue).csv", etable.Comma)
+	bert := etable.NewIdxView(ss.BertLog)
+	ss.Bert.SimMat.TableCol(bert, "Tensor", "Word", true, metric.Correlation64)
+
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -1758,6 +1804,18 @@ func (ss *Sim) ClustPlot(plt *eplot.Plot2D, ix *etable.IdxView, colNm, lblNm str
 	plt.SetColParams("X", eplot.Off, eplot.FixMin, 0, eplot.FloatMax, 0)
 	plt.SetColParams("Y", eplot.On, eplot.FixMin, 0, eplot.FloatMax, 0)
 	plt.SetColParams("Label", eplot.On, eplot.FixMin, 0, eplot.FloatMax, 0)
+}
+
+func (ss *Sim) ConfigPCAPlot(plt *eplot.Plot2D, dt *etable.Table, nm string) {
+	plt.Params.Title = "Family Trees PCA Plot: " + nm
+	plt.Params.XAxisCol = "Prjn0"
+	plt.SetTable(dt)
+	plt.Params.Lines = false
+	plt.Params.Points = true
+	// order of params: on, fixMin, min, fixMax, max
+	plt.SetColParams("TrialName", eplot.On, eplot.FixMin, 0, eplot.FloatMax, 0)
+	plt.SetColParams("Prjn0", eplot.Off, eplot.FixMin, 0, eplot.FloatMax, 0)
+	plt.SetColParams("Prjn1", eplot.On, eplot.FixMin, 0, eplot.FloatMax, 0)
 }
 
 //////////////////////////////////////////////
